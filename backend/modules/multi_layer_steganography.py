@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MULTI-LAYER STEGANOGRAPHY MODULE - ADVANCED LAYERED EMBEDDING
-Supports multiple hidden messages/files with same or different passwords
+FIXED MULTI-LAYER STEGANOGRAPHY MODULE - RECURSIVE LAYERED EMBEDDING
+Supports true multi-level embedding where each layer contains all previous layers
 """
 
 import os
@@ -119,30 +119,13 @@ def detect_filename_from_content(data):
     
     return "extracted_file.bin"
 
-class MultiLayerSteganography:
-    """Advanced multi-layer steganography supporting multiple hidden messages"""
+class FixedMultiLayerSteganography:
+    """FIXED: True multi-layer steganography with recursive layer structure"""
     
     def __init__(self):
-        # Version-based magic headers for layered embedding
-        self.magic_headers = {
-            1: b"VEILFORGE_LAYER_V1_SAFE",
-            2: b"VEILFORGE_LAYER_V2_SAFE", 
-            3: b"VEILFORGE_LAYER_V3_SAFE",
-            4: b"VEILFORGE_LAYER_V4_SAFE",
-            5: b"VEILFORGE_LAYER_V5_SAFE",
-        }
-        
-        self.end_markers = {
-            1: b"VEILFORGE_LAYER_END_V1",
-            2: b"VEILFORGE_LAYER_END_V2",
-            3: b"VEILFORGE_LAYER_END_V3", 
-            4: b"VEILFORGE_LAYER_END_V4",
-            5: b"VEILFORGE_LAYER_END_V5",
-        }
-        
-        # Layer index markers
-        self.layer_index_magic = b"VEILFORGE_LAYER_INDEX_V1"
-        self.layer_index_end = b"VEILFORGE_LAYER_INDEX_END"
+        # Unified magic header for all layers
+        self.magic_header = b"VEILFORGE_MULTILAYER_UNIFIED_V1"
+        self.end_marker = b"VEILFORGE_MULTILAYER_END_V1"
         
         # Legacy compatibility
         self.legacy_magic = b"VEILFORGE_UNIVERSAL_SAFE_V2"
@@ -151,87 +134,214 @@ class MultiLayerSteganography:
     def hide_data(self, carrier_file_path: str, content_to_hide: Union[str, bytes], 
                   output_path: str, password: Optional[str] = None, 
                   is_file: bool = False, original_filename: str = None, **kwargs) -> Dict[str, Any]:
-        """Multi-layer hiding method that preserves ALL file types"""
+        """
+        FIXED: Multi-layer hiding method that creates proper recursive structure
+        Each new layer contains ALL previous layers as a complete package
+        """
         
-        print(f"[MULTI-LAYER] Processing {os.path.basename(carrier_file_path)}")
+        print(f"[FIXED-MULTILAYER] Processing {os.path.basename(carrier_file_path)}")
         
         # Read carrier file (might already contain hidden layers)
         with open(carrier_file_path, 'rb') as f:
-            file_data = f.read()
+            carrier_data = f.read()
         
-        # Detect existing layers
-        existing_layers = self._detect_existing_layers(file_data)
-        next_layer_number = len(existing_layers) + 1
+        # Check if this file already contains hidden data
+        existing_structure = self._extract_existing_multilayer_structure(carrier_data, password)
         
-        print(f"[MULTI-LAYER] Found {len(existing_layers)} existing layers")
-        print(f"[MULTI-LAYER] Adding layer #{next_layer_number}")
+        if existing_structure:
+            layer_count = len(existing_structure['layers']) + 1
+            print(f"[FIXED-MULTILAYER] Found existing structure with {len(existing_structure['layers'])} layers")
+            print(f"[FIXED-MULTILAYER] Adding new layer #{layer_count}")
+        else:
+            layer_count = 1
+            print(f"[FIXED-MULTILAYER] Creating first layer")
         
-        # Determine file type
-        file_ext = os.path.splitext(carrier_file_path)[1].lower()
-        
-        # Prepare secret data
+        # Prepare new content
         if is_file and isinstance(content_to_hide, str) and os.path.exists(content_to_hide):
             with open(content_to_hide, 'rb') as f:
-                original_payload = f.read()
-            filename = original_filename or os.path.basename(content_to_hide)
+                new_content = f.read()
+            new_filename = original_filename or os.path.basename(content_to_hide)
         else:
             # Handle various input types safely
             if isinstance(content_to_hide, str):
-                original_payload = content_to_hide.encode('utf-8')
+                new_content = content_to_hide.encode('utf-8')
             elif isinstance(content_to_hide, bytes):
-                original_payload = content_to_hide
+                new_content = content_to_hide
             else:
-                original_payload = str(content_to_hide).encode('utf-8')
+                new_content = str(content_to_hide).encode('utf-8')
             
-            # Use proper file detection instead of hardcoding .txt
-            if original_filename:
-                filename = original_filename
-            else:
-                detected_filename = detect_filename_from_content(original_payload)
-                # Replace generic prefix with layer-specific prefix
-                if detected_filename.startswith("extracted_"):
-                    base_name = detected_filename.replace("extracted_", f"hidden_message_layer_{next_layer_number}_")
-                else:
-                    base_name = f"hidden_message_layer_{next_layer_number}_{detected_filename}"
-                filename = base_name
+            new_filename = original_filename or detect_filename_from_content(new_content)
         
-        return self._embed_new_layer(file_data, original_payload, output_path, 
-                                   password, filename, file_ext, next_layer_number, existing_layers)
+        # Create the multilayer structure
+        if existing_structure:
+            # Add to existing structure
+            multilayer_data = self._add_layer_to_structure(
+                existing_structure, new_content, new_filename, layer_count
+            )
+        else:
+            # Create new structure
+            multilayer_data = self._create_new_multilayer_structure(
+                new_content, new_filename, layer_count
+            )
+        
+        # Get the original carrier file data (without any existing embedded data)
+        if existing_structure:
+            # Use the original carrier from the existing structure
+            original_carrier = existing_structure['original_carrier']
+        else:
+            # This is the first embedding, so the current file is the original carrier
+            original_carrier = carrier_data
+        
+        # Encrypt the complete multilayer structure if password provided
+        if password:
+            encrypted_data = self._encrypt_data(multilayer_data, password)
+        else:
+            encrypted_data = multilayer_data
+        
+        # Create metadata for the complete structure
+        structure_metadata = {
+            'version': 'fixed_multilayer_v1',
+            'total_layers': layer_count,
+            'encrypted': bool(password),
+            'password_hash': hashlib.sha256((password or "").encode()).hexdigest() if password else None,
+            'original_carrier_size': len(original_carrier),
+            'structure_size': len(multilayer_data),
+            'structure_checksum': hashlib.sha256(multilayer_data).hexdigest()
+        }
+        
+        metadata_json = json.dumps(structure_metadata).encode('utf-8')
+        
+        # Build the final embedded file: original_carrier + embedded_structure
+        embedded_structure = (
+            self.magic_header +
+            len(metadata_json).to_bytes(4, 'little') +
+            metadata_json +
+            len(encrypted_data).to_bytes(4, 'little') +
+            encrypted_data +
+            self.end_marker
+        )
+        
+        # Final file = original carrier + embedded structure
+        final_file = original_carrier + embedded_structure
+        
+        # Write to output
+        with open(output_path, 'wb') as f:
+            f.write(final_file)
+        
+        overhead = len(final_file) - len(original_carrier)
+        
+        print(f"[FIXED-MULTILAYER] ✅ Layer #{layer_count} added successfully")
+        print(f"[FIXED-MULTILAYER] ✅ Total structure size: {len(multilayer_data)} bytes")
+        print(f"[FIXED-MULTILAYER] ✅ Total overhead: {overhead} bytes")
+        
+        return {
+            'success': True,
+            'method': 'fixed_multilayer_recursive',
+            'layer_number': layer_count,
+            'total_layers': layer_count,
+            'overhead_bytes': overhead,
+            'structure_size': len(multilayer_data),
+            'file_type_preserved': True
+        }
     
-    def _detect_existing_layers(self, file_data: bytes) -> List[Dict[str, Any]]:
-        """Detect all existing hidden layers in the file"""
-        layers = []
+    def _create_new_multilayer_structure(self, content: bytes, filename: str, layer_number: int) -> bytes:
+        """Create a new multilayer structure with the first layer"""
         
-        # Check for legacy format first
-        legacy_pos = file_data.find(self.legacy_magic)
-        if legacy_pos != -1:
-            layer_info = {
-                'layer_number': 0,  # Legacy layer
-                'magic_pos': legacy_pos,
-                'magic_header': self.legacy_magic,
-                'end_marker': self.legacy_end,
-                'password_hash': None  # Will be determined during extraction
-            }
-            layers.append(layer_info)
+        structure = {
+            'type': 'fixed_multilayer_container',
+            'version': 1,
+            'created_layer': layer_number,
+            'layers': [
+                {
+                    'layer_number': layer_number,
+                    'filename': filename,
+                    'content_size': len(content),
+                    'content_base64': base64.b64encode(content).decode('utf-8'),
+                    'checksum': hashlib.sha256(content).hexdigest(),
+                    'timestamp': str(uuid.uuid4())
+                }
+            ]
+        }
         
-        # Check for versioned layers
-        for version in range(1, 6):
-            magic_header = self.magic_headers.get(version)
-            if magic_header:
-                pos = file_data.find(magic_header)
-                if pos != -1:
-                    layer_info = {
-                        'layer_number': version,
-                        'magic_pos': pos,
-                        'magic_header': magic_header,
-                        'end_marker': self.end_markers[version],
-                        'password_hash': None
-                    }
-                    layers.append(layer_info)
+        return json.dumps(structure).encode('utf-8')
+    
+    def _add_layer_to_structure(self, existing_structure: Dict, new_content: bytes, 
+                               new_filename: str, layer_number: int) -> bytes:
+        """Add a new layer to existing multilayer structure"""
         
-        # Sort layers by position in file
-        layers.sort(key=lambda x: x['magic_pos'])
-        return layers
+        # Add the new layer to the existing layers
+        existing_structure['layers'].append({
+            'layer_number': layer_number,
+            'filename': new_filename,
+            'content_size': len(new_content),
+            'content_base64': base64.b64encode(new_content).decode('utf-8'),
+            'checksum': hashlib.sha256(new_content).hexdigest(),
+            'timestamp': str(uuid.uuid4())
+        })
+        
+        # Update metadata
+        existing_structure['created_layer'] = layer_number
+        
+        # Create a clean structure for JSON serialization (exclude non-serializable fields)
+        clean_structure = {
+            'type': existing_structure['type'],
+            'version': existing_structure['version'],
+            'created_layer': existing_structure['created_layer'],
+            'layers': existing_structure['layers']
+        }
+        
+        return json.dumps(clean_structure).encode('utf-8')
+    
+    def _extract_existing_multilayer_structure(self, file_data: bytes, password: Optional[str]) -> Optional[Dict]:
+        """Extract existing multilayer structure from file"""
+        
+        # Look for our magic header
+        magic_pos = file_data.find(self.magic_header)
+        if magic_pos == -1:
+            return None
+        
+        try:
+            # Parse metadata
+            metadata_size_pos = magic_pos + len(self.magic_header)
+            metadata_size = int.from_bytes(file_data[metadata_size_pos:metadata_size_pos+4], 'little')
+            
+            metadata_pos = metadata_size_pos + 4
+            metadata_json = file_data[metadata_pos:metadata_pos+metadata_size]
+            metadata = json.loads(metadata_json.decode('utf-8'))
+            
+            # Check if password is required and matches
+            if metadata.get('encrypted') and not password:
+                print("[FIXED-MULTILAYER] Structure is encrypted but no password provided")
+                return None
+            elif metadata.get('password_hash') and password:
+                provided_hash = hashlib.sha256(password.encode()).hexdigest()
+                if metadata['password_hash'] != provided_hash:
+                    print("[FIXED-MULTILAYER] Password does not match")
+                    return None
+            
+            # Parse structure data
+            data_size_pos = metadata_pos + metadata_size
+            data_size = int.from_bytes(file_data[data_size_pos:data_size_pos+4], 'little')
+            
+            structure_pos = data_size_pos + 4
+            structure_data = file_data[structure_pos:structure_pos+data_size]
+            
+            # Decrypt if needed
+            if metadata.get('encrypted') and password:
+                structure_data = self._decrypt_data(structure_data, password)
+            
+            # Parse the multilayer structure
+            structure = json.loads(structure_data.decode('utf-8'))
+            
+            # Add original carrier data (everything before the magic header) - store as base64 to avoid JSON serialization issues
+            structure['original_carrier'] = file_data[:magic_pos]  # Keep as bytes for internal use
+            structure['metadata'] = metadata
+            
+            return structure
+            
+        except Exception as e:
+            print(f"[FIXED-MULTILAYER] Error extracting existing structure: {e}")
+            return None
     
     def _embed_new_layer(self, file_data: bytes, secret_data: bytes, 
                         output_path: str, password: Optional[str], 
@@ -363,39 +473,63 @@ class MultiLayerSteganography:
     
     def extract_all_layers(self, stego_file_path: str, password: Optional[str] = None, 
                           output_dir: str = None) -> Dict[str, Any]:
-        """Extract only the most recent layer that matches the password - prevents cross-contamination"""
+        """
+        FIXED: Extract all layers from multilayer structure
+        Returns all layers that were embedded with the same password
+        """
         
         with open(stego_file_path, 'rb') as f:
             file_data = f.read()
         
-        print(f"[MULTI-LAYER] Analyzing file for hidden layers...")
+        print(f"[FIXED-MULTILAYER] Analyzing file for multilayer structure...")
         
-        # Detect all layers
-        existing_layers = self._detect_existing_layers(file_data)
+        # Try to extract multilayer structure
+        structure = self._extract_existing_multilayer_structure(file_data, password)
         
-        if not existing_layers:
-            print("[MULTI-LAYER] No hidden layers found")
-            return {'success': False, 'message': 'No hidden data found'}
+        if not structure:
+            # Fallback: Try legacy extraction for backward compatibility
+            legacy_result = self._try_legacy_extraction(file_data, password)
+            if legacy_result:
+                return legacy_result
+            
+            print("[FIXED-MULTILAYER] No multilayer structure found")
+            return {'success': False, 'message': 'No hidden data found or incorrect password'}
         
-        print(f"[MULTI-LAYER] Found {len(existing_layers)} layer(s)")
+        layers = structure.get('layers', [])
+        if not layers:
+            return {'success': False, 'message': 'No layers found in structure'}
         
-        # EXTRACT ALL LAYERS: Extract all layers that match the password
-        # This allows proper multi-layer functionality
+        print(f"[FIXED-MULTILAYER] Found {len(layers)} layer(s)")
+        
+        # Extract all layers
         extracted_layers = []
         
-        # Process layers in order (oldest to newest for proper numbering)
-        for layer_info in existing_layers:
+        for layer in layers:
             try:
-                layer_data = self._extract_single_layer(file_data, layer_info, password)
-                if layer_data:
-                    extracted_layers.append(layer_data)
-                    print(f"[MULTI-LAYER] ✅ Extracted layer #{layer_info['layer_number']}")
-                    # Continue to extract ALL matching layers, not just the first one
+                # Decode layer content
+                content_data = base64.b64decode(layer['content_base64'])
+                
+                # Verify checksum
+                expected_checksum = layer.get('checksum')
+                if expected_checksum:
+                    actual_checksum = hashlib.sha256(content_data).hexdigest()
+                    if actual_checksum != expected_checksum:
+                        print(f"[FIXED-MULTILAYER] Warning: Checksum mismatch for layer {layer['layer_number']}")
+                
+                extracted_layers.append({
+                    'layer_number': layer['layer_number'],
+                    'filename': layer['filename'],
+                    'content': content_data,
+                    'size': len(content_data)
+                })
+                
+                print(f"[FIXED-MULTILAYER] ✅ Extracted layer #{layer['layer_number']}: {layer['filename']}")
+                
             except Exception as e:
-                print(f"[MULTI-LAYER] ⚠️ Failed to extract layer #{layer_info['layer_number']}: {e}")
+                print(f"[FIXED-MULTILAYER] ⚠️ Failed to extract layer #{layer['layer_number']}: {e}")
         
         if not extracted_layers:
-            return {'success': False, 'message': 'No layers could be extracted with the provided password'}
+            return {'success': False, 'message': 'Failed to extract any layers'}
         
         # If only one layer extracted, return it directly
         if len(extracted_layers) == 1:
@@ -436,7 +570,7 @@ class MultiLayerSteganography:
             }
         
         # Multiple layers - create zip file
-        return self._create_multi_layer_response(extracted_layers, output_dir, len(existing_layers))
+        return self._create_multi_layer_response(extracted_layers, output_dir, len(layers))
     
     def _extract_single_layer(self, file_data: bytes, layer_info: Dict, password: Optional[str]) -> Optional[Dict[str, Any]]:
         """Extract a single layer from file data"""
@@ -628,8 +762,8 @@ class MultiLayerSteganography:
         return aesgcm.decrypt(nonce, ciphertext, None)
 
 # Backward compatibility wrapper
-class UniversalFileSteganography(MultiLayerSteganography):
-    """Backward compatible wrapper that adds multi-layer support to existing API"""
+class UniversalFileSteganography(FixedMultiLayerSteganography):
+    """Backward compatible wrapper using fixed multilayer implementation"""
     
     def __init__(self):
         super().__init__()
@@ -637,37 +771,30 @@ class UniversalFileSteganography(MultiLayerSteganography):
     def extract_data(self, stego_file_path: str, password: Optional[str] = None, 
                      output_dir: str = None) -> Optional[Union[Tuple[bytes, str], Dict[str, Any]]]:
         """
-        FIXED: Use normal multi-layer extraction for legitimate operations
-        This ensures compatibility with how data was embedded
+        FIXED: Use corrected multi-layer extraction
         """
         
         try:
-            # Use the normal multi-layer extraction method
-            print(f"[MULTI-LAYER EXTRACT] Using normal extraction method")
+            print(f"[FIXED-MULTILAYER EXTRACT] Using fixed extraction method")
             result = self.extract_all_layers(stego_file_path, password, output_dir)
             
             if not result or not result.get('success'):
                 return None
             
-            # If output_dir was specified, the result should already be in the correct format
             if output_dir:
                 return result
             else:
-                # Handle single extraction case (most common for forensic)
+                # Handle single extraction case
                 if result.get('single_extraction'):
-                    # Single layer was extracted successfully
                     filename = result.get('filename', 'extracted_data.txt')
-                    # The extracted_data is already decoded as text for single layers
                     text_data = result.get('extracted_data', '')
                     
-                    # For forensic extraction, we need to return the raw text (not re-encode)
-                    # since the forensic data is JSON text that was embedded as text
                     if isinstance(text_data, str):
-                        return (text_data.encode('utf-8'), filename)  # Return as bytes for consistency
+                        return (text_data.encode('utf-8'), filename)
                     else:
                         return (text_data, filename)
                 else:
-                    # Multiple layers - get from extracted_layers array
+                    # Multiple layers
                     layers = result.get('extracted_layers', [])
                     if layers:
                         first_layer = layers[0]
@@ -677,201 +804,121 @@ class UniversalFileSteganography(MultiLayerSteganography):
                 return None
         
         except Exception as e:
-            print(f"Extraction error: {e}")
+            print(f"Fixed extraction error: {e}")
             return None
     
-    def extract_single_file_layer(self, file_data: bytes, password: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        SECURITY CRITICAL: Extract data ONLY from this specific file, never from other files.
-        Uses file hash binding to ensure no cross-file contamination.
-        """
+    def _try_legacy_extraction(self, file_data: bytes, password: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Try to extract data using legacy format for backward compatibility"""
         try:
-            # Generate file hash for this specific file
-            file_hash = hashlib.sha256(file_data).hexdigest()[:16]
-            print(f"[SECURE EXTRACT] File hash: {file_hash}")
-            
-            # Try to extract data using LSB method directly from this file's data
-            extracted_data = self._extract_from_file_data_secure(file_data, password, file_hash)
-            
-            if extracted_data:
-                print(f"[SECURE EXTRACT] ✅ Found data in THIS file: {len(extracted_data)} bytes")
-                
-                # Detect content type
-                is_text = True
-                try:
-                    text_content = extracted_data.decode('utf-8')
-                    filename = 'extracted_message.txt'
-                except UnicodeDecodeError:
-                    text_content = f"[Binary data: {len(extracted_data)} bytes]"
-                    filename = 'extracted_file.bin'
-                    is_text = False
-                
-                return {
-                    'single_extraction': True,
-                    'file_type': 'text' if is_text else 'binary',
-                    'content': extracted_data,
-                    'encrypted': bool(password),
-                    'metadata': {'filename': filename, 'file_hash': file_hash},
-                    'layer_info': {
-                        'layer_number': 1,
-                        'file_type': 'text' if is_text else 'binary',
-                        'encrypted': bool(password)
-                    }
-                }
-            else:
-                print(f"[SECURE EXTRACT] ❌ No data found in THIS file")
+            # Look for legacy magic header
+            legacy_pos = file_data.find(self.legacy_magic)
+            if legacy_pos == -1:
                 return None
-                
-        except Exception as e:
-            print(f"[SECURE EXTRACT] Error: {e}")
-            return None
-    
-    def _extract_from_file_data_secure(self, file_data: bytes, password: Optional[str], expected_file_hash: str) -> Optional[bytes]:
-        """Extract data directly from file bytes with hash verification to prevent cross-contamination"""
-        try:
-            # Look for our magic marker in the file data
-            magic_start = b"VEILFORGE_LAYER_START"
-            magic_end = b"VEILFORGE_LAYER_END"
             
-            # Find all potential data blocks
-            start_pos = 0
-            while True:
-                start_idx = file_data.find(magic_start, start_pos)
-                if start_idx == -1:
-                    break
-                    
-                end_idx = file_data.find(magic_end, start_idx + len(magic_start))
-                if end_idx == -1:
-                    start_pos = start_idx + len(magic_start)
-                    continue
-                
-                # Extract the data block
-                data_block = file_data[start_idx + len(magic_start):end_idx]
-                
-                try:
-                    # Try to parse as layer data
-                    if len(data_block) < 8:
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    
-                    # Read metadata length
-                    metadata_len = struct.unpack('<I', data_block[:4])[0]
-                    if metadata_len > len(data_block) - 8:
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    
-                    # Read content length
-                    content_len = struct.unpack('<I', data_block[4:8])[0]
-                    if metadata_len + content_len + 8 > len(data_block):
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    
-                    # Extract metadata and content
-                    metadata_bytes = data_block[8:8 + metadata_len]
-                    content_bytes = data_block[8 + metadata_len:8 + metadata_len + content_len]
-                    
-                    # Parse metadata
-                    metadata = json.loads(metadata_bytes.decode('utf-8'))
-                    
-                    # CRITICAL SECURITY CHECK: Verify file hash
-                    stored_file_hash = metadata.get('file_hash', '')
-                    if stored_file_hash and stored_file_hash != expected_file_hash:
-                        print(f"[SECURE EXTRACT] Rejecting data: hash mismatch {stored_file_hash} != {expected_file_hash}")
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    
-                    # Decrypt if password provided
-                    if password and metadata.get('encrypted', False):
-                        try:
-                            content_bytes = self._decrypt_data(content_bytes, password)
-                        except Exception as decrypt_error:
-                            print(f"[SECURE EXTRACT] Decryption failed: {decrypt_error}")
-                            start_pos = end_idx + len(magic_end)
-                            continue
-                    elif password and not metadata.get('encrypted', False):
-                        # Password provided but data not encrypted - skip
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    elif not password and metadata.get('encrypted', False):
-                        # Data encrypted but no password - skip
-                        start_pos = end_idx + len(magic_end)
-                        continue
-                    
-                    print(f"[SECURE EXTRACT] ✅ Valid data found for this file")
-                    return content_bytes
-                    
-                except (json.JSONDecodeError, struct.error, UnicodeDecodeError) as parse_error:
-                    print(f"[SECURE EXTRACT] Parse error: {parse_error}")
-                    start_pos = end_idx + len(magic_end)
-                    continue
-                
-                start_pos = end_idx + len(magic_end)
+            print("[FIXED-MULTILAYER] Found legacy format, attempting extraction...")
             
-            # No valid data found
-            print(f"[SECURE EXTRACT] No valid data found in this file")
-            return None
+            # Parse legacy metadata
+            metadata_size_pos = legacy_pos + len(self.legacy_magic)
+            metadata_size = int.from_bytes(file_data[metadata_size_pos:metadata_size_pos+4], 'little')
+            
+            metadata_pos = metadata_size_pos + 4
+            metadata_json = file_data[metadata_pos:metadata_pos+metadata_size]
+            metadata = json.loads(metadata_json.decode('utf-8'))
+            
+            # Check encryption compatibility
+            if metadata.get('encrypted', False) and not password:
+                return None
+            elif not metadata.get('encrypted', False) and password:
+                return None
+            
+            # Parse data
+            data_size_pos = metadata_pos + metadata_size
+            data_size = int.from_bytes(file_data[data_size_pos:data_size_pos+4], 'little')
+            
+            payload_pos = data_size_pos + 4
+            payload_data = file_data[payload_pos:payload_pos+data_size]
+            
+            # Decrypt if needed
+            if metadata['encrypted'] and password:
+                secret_data = self._decrypt_data(payload_data, password)
+            else:
+                secret_data = payload_data
+            
+            return {
+                'success': True,
+                'single_extraction': True,
+                'extracted_data': secret_data.decode('utf-8', errors='replace'),
+                'filename': metadata.get('filename', 'legacy_extracted.txt'),
+                'layer_number': 0,
+                'total_layers_found': 1,
+                'binary_content': secret_data
+            }
             
         except Exception as e:
-            print(f"[SECURE EXTRACT] Extraction error: {e}")
-            return None
+            print(f"[FIXED-MULTILAYER] Legacy extraction failed: {e}")
             return None
 
+# Legacy compatibility function
 def extract_layered_data_container(layered_container_json: bytes) -> List[Tuple[bytes, str]]:
     """
-    Extract layers from a layered container JSON
-    
-    Args:
-        layered_container_json: The JSON bytes from a layered container
-        
-    Returns:
-        List of tuples (layer_data, layer_filename)
+    Extract layers from a layered container JSON - for backward compatibility
     """
     try:
-        # Parse the layered container JSON
+        # Use the fixed multilayer class to handle this
         container_str = layered_container_json.decode('utf-8')
         container = json.loads(container_str)
         
-        if container.get('type') != 'layered_container':
-            raise ValueError(f"Not a layered container: {container.get('type')}")
-        
-        layers = container.get('layers', [])
-        if not layers:
-            raise ValueError("No layers found in container")
-        
-        extracted_layers = []
-        
-        for layer in layers:
-            layer_filename = layer.get('filename', f'layer_{layer.get("index", 0)}.bin')
-            layer_type = layer.get('type', 'binary')
-            layer_content = layer.get('content', '')
+        if container.get('type') == 'fixed_multilayer_container':
+            # New format
+            layers = container.get('layers', [])
+            extracted_layers = []
             
-            if layer_type == 'binary':
-                # Base64 decode binary content
+            for layer in layers:
+                layer_filename = layer.get('filename', f'layer_{layer.get("layer_number", 0)}.bin')
+                layer_content = layer.get('content_base64', '')
+                
                 try:
                     layer_data = base64.b64decode(layer_content)
+                    extracted_layers.append((layer_data, layer_filename))
+                    print(f"[FIXED-MULTILAYER] Extracted layer: {layer_filename} ({len(layer_data)} bytes)")
                 except Exception as e:
-                    print(f"[LAYER ERROR] Failed to decode base64 for {layer_filename}: {e}")
-                    continue
-            elif layer_type == 'text':
-                # Base64 decode text content 
-                try:
-                    decoded_bytes = base64.b64decode(layer_content)
-                    layer_data = decoded_bytes
-                except Exception as e:
-                    print(f"[LAYER ERROR] Failed to decode base64 text for {layer_filename}: {e}")
-                    # Try as raw text
-                    layer_data = layer_content.encode('utf-8')
-            else:
-                # Unknown type, treat as text
-                layer_data = layer_content.encode('utf-8')
+                    print(f"[FIXED-MULTILAYER] Failed to decode layer {layer_filename}: {e}")
             
-            extracted_layers.append((layer_data, layer_filename))
-            print(f"[LAYER SUCCESS] Extracted layer: {layer_filename} ({len(layer_data)} bytes)")
+            return extracted_layers
         
-        return extracted_layers
+        # Old format - handle for backward compatibility
+        elif container.get('type') == 'layered_container':
+            layers = container.get('layers', [])
+            extracted_layers = []
+            
+            for layer in layers:
+                layer_filename = layer.get('filename', f'layer_{layer.get("index", 0)}.bin')
+                layer_type = layer.get('type', 'binary')
+                layer_content = layer.get('content', '')
+                
+                if layer_type == 'binary':
+                    try:
+                        layer_data = base64.b64decode(layer_content)
+                    except Exception as e:
+                        print(f"[LEGACY] Failed to decode base64 for {layer_filename}: {e}")
+                        continue
+                elif layer_type == 'text':
+                    try:
+                        decoded_bytes = base64.b64decode(layer_content)
+                        layer_data = decoded_bytes
+                    except Exception as e:
+                        print(f"[LEGACY] Failed to decode base64 text for {layer_filename}: {e}")
+                        layer_data = layer_content.encode('utf-8')
+                else:
+                    layer_data = layer_content.encode('utf-8')
+                
+                extracted_layers.append((layer_data, layer_filename))
+                print(f"[LEGACY] Extracted layer: {layer_filename} ({len(layer_data)} bytes)")
+            
+            return extracted_layers
+        
+        return []
         
     except Exception as e:
-        print(f"[LAYER ERROR] Failed to extract layered container: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"[EXTRACT ERROR] Failed to extract container: {e}")
         return []
